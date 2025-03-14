@@ -1,0 +1,44 @@
+<!DOCTYPE html> <!--declares that it is ahtmly 5 doc. and the english language -->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streak Map</title>
+    <style> <!--ah so this literally ends the if statement -->
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        .map-container {
+            width: 100%; /* Allow full width of parent container - thi is a 'responseive' width */
+            height: 400px;
+            margin: 20px auto;
+            border: 2px solid black;
+            position: relative;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Select a Streak ID</h2> <!-- this is the header -->
+    <form method="POST"> <!-- value of POST means the browser will send the data to the web server to be processed-->
+        <input type="number" name="streak_id" placeholder="Enter Streak ID" required>
+        <button type="submit">Generate Map</button>
+    </form>
+
+    {% if error_message %} <!--This is Jinja templating (used in Python Flask/Django web apps). -->
+        <p style="color: red;">{{ error_message }}</p>
+    {% endif %} <!--ah so this literally ends the if statement -->
+
+    {% if map_html %} <!--this is the map. If map_html exists, it is injected inside .map-container.-->
+        <div class="map-container">
+            {{ map_html|safe }}
+        </div>
+    {% endif %}
+
+</body>
+</html>
