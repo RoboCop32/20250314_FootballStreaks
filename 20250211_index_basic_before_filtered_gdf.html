@@ -24,114 +24,83 @@
 </head>
 <body>
 
-    <h2>Select a Streak ID</h2>
+    <h2>How Many Days Gaps Between Games are you after? (choose between 1-10)</h2>
     <form method="POST">
-        <input type="number" name="streak_id" placeholder="Enter Streak ID" required>
-        <button type="submit">Generate Map</button>
+        <input type="number" name="streak_gap" placeholder="Enter Day Gap" required min="1" max="10"> <!--Required 1 - 10 means they ahve put 1-10 -->
+        <button type="submit">Generate Itineraries</button>
     </form>
 
     {% if error_message %}
         <p style="color: red;">{{ error_message }}</p>
     {% endif %}
+	
+	<!--<form method="POST">
+        <input type="number" name="streak_id" placeholder="Enter Streak ID" required min="1" max="10"> <!--Required 1 - 10 means they ahve put 1-10 -->
+     <!--   <button type="submit">Generate Map</button>
+    </form>
 
-    <button id="toggle-filter">Toggle Filtered Map</button>
+    <button id="toggle-filter">Toggle Filtered Map</button>-->
 
-    <div class="map-container">
-        {{ map_html|safe }}
-    </div>
+
 
     <h3>Data Table</h3>
     <div class="table-container">
         <table id="data-table" border="1">
             <thead>
-                <tr>
-                    <th>Unique ID</th>
-                    <th>Date</th>
-                    <th>Home</th>
-                    <th>Away</th>
-                    <th>Latitude</th>
-                    <th>Longitude</th>
+                <tr >
+  
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Country</th>
+					<th>Number of Matches in a row</th>
+					<th>ID</th>
+
                 </tr>
             </thead>
             <tbody>
-                {% for row in gdf_data %}
-                <tr data-lat="{{ row.geometry.y }}" data-lon="{{ row.geometry.x }}">
-                    <td>{{ row.unique_id }}</td>
-                    <td>{{ row.date }}</td>
-                    <td>{{ row.home }}</td>
-                    <td>{{ row.away }}</td>
-                    <td>{{ row.geometry.y }}</td>
-                    <td>{{ row.geometry.x }}</td>
+                {% for row in df_data %} <!-- So this you have to match the table. also make sure the columns below match .columns!-->
+                <tr data-streak-id="{{ row.Streak_ID }}"> <!-- tr means table row -->
+                    
+                    <td>{{ row.interval_start_date }}</td>
+                    <td>{{ row.interval_end_date }}</td>
+                    <td>{{ row.streak_country }}</td>
+					<td>{{ row.day_interval }}</td>
+					<td>{{ row.Streak_ID }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+	
+	<div class="map-container">
+        {{ map_html|safe }}
+    </div>
+	
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    function attachRowClickEvents() { //function with no paramters
+        document.querySelectorAll("#data-table tbody tr").forEach(row => { //.query selector - this selects all tabe rows inside of element datatable. AND .forEach is a loop, and executes the following code...
+            row.addEventListener("click", function() { //this listens to a Click
+                let streakId = this.dataset.streakId; //'this' refers to the row that was clicked. it refers to where you were  doing <tr data streak id = 222 >
+                
+                if (streakId) { //simple if statement
+                    document.querySelector(".map-container").innerHTML = "<p>Loading map...</p>";
 
-    <script>
-        let map; // Global map variable
-
-        document.getElementById("toggle-filter").addEventListener("click", function() {
-            fetch("/toggle_map")
-                .then(response => response.text())
-                .then(data => {
-                    document.querySelector(".map-container").innerHTML = data;
-                    updateMap();
-                });
-        });
-
-        function updateMap() {
-            map = document.querySelector(".map-container iframe");
-        }
-
-        // Zoom to location when row is clicked
-        document.querySelectorAll("#data-table tbody tr").forEach(row => {
-            row.addEventListener("click", function() {
-                let lat = parseFloat(this.dataset.lat);
-                let lon = parseFloat(this.dataset.lon);
-
-                if (map && map.contentWindow) {
-                    map.contentWindow.postMessage({ zoomTo: [lat, lon] }, "*");
+                    fetch(`/get_streak/${streakId}`) //fetch is used to send a request to the server
+                        .then(response => response.text()) //this just converts the reposne to plain text
+                        .then(data => { //.then is used as part of a Promise.
+                            document.querySelector(".map-container").innerHTML = data;
+                            updateMap();  // Ensure map updates properly
+                        })
+                        .catch(error => { //arrow is a shorthand way to write functions
+                            console.error("Error fetching streak:", error);
+                            document.querySelector(".map-container").innerHTML = "<p style='color: red;'>Failed to load map.</p>";
+                        });
                 }
             });
         });
+    }
 
-        updateMap();
-    </script>
-
-    <style>
-	
-	.map-container {
-    width: 80%;
-    height: 500px;
-    margin-bottom: 50px; /* Adds space between map and table */
-	}
-
-	.table-container {
-		width: 90%;
-		margin: auto;
-		max-height: 300px;
-		overflow-y: auto; /* Enables scrolling if too many rows */
-	}
-
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid black;
-            text-align: center;
-        }
-        tr:hover {
-            background-color: lightgray;
-            cursor: pointer;
-        }
-    </style>
-
-</body>
-<script>
     function updateMap() {
         let mapFrame = document.querySelector(".map-container iframe");
 
@@ -147,13 +116,28 @@
         });
     }
 
-    window.addEventListener("message", function(event) {
-        if (event.data.zoomTo) {
-            let [lat, lon] = event.data.zoomTo;
-            zoomToLocation(lat, lon);
-        }
+    // Rebind row click events whenever the form is submitted
+    document.querySelector("form").addEventListener("submit", function() {
+        setTimeout(() => {
+            document.querySelector(".map-container").innerHTML = "";  // Clear the map
+            attachRowClickEvents();  // Reattach click events to new table rows
+        }, 500);  // Delay to allow data update
     });
 
-    updateMap();
+    // Handle toggle filtered map button
+    let toggleButton = document.getElementById("toggle-filter");
+    if (toggleButton) {
+        toggleButton.addEventListener("click", function() {
+            fetch("/toggle_map")
+                .then(response => response.text())
+                .then(data => {
+                    document.querySelector(".map-container").innerHTML = data;
+                    updateMap();
+                });
+        });
+    }
+
+    attachRowClickEvents();  // Initial binding on page load
+});
 </script>
 </html>
