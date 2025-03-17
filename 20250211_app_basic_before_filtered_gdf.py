@@ -9,7 +9,7 @@
 # nah so change this - make the main table have lots of table ids based on the 1-10 strak gaps. then we just query that table
 
 
-from flask import Flask, render_template, request, Markup
+from flask import Flask, render_template, request, Markup, jsonify, session
 from flask import g
 
 import geopandas as gpd
@@ -346,55 +346,20 @@ def index():
         
         app.config['streak_gap'] = streak_gap
         
-        print("goy")
         if streak_gap:
             try:
                 streak_gap = int(streak_gap)
-                selected_streak = retrieve_streaks(main_table_name,streak_gap,engine1)
-                
-                print("fdfdfd")
-                print(selected_streak.columns)
+                selected_streak = retrieve_streaks(main_table_name, streak_gap, engine1)
                 
                 if selected_streak is not None:
-                    # Convert gdf to a list of dicts for the HTML table
                     df_data = selected_streak.to_dict(orient="records")
-                    
-                    # Store both versions
-                    app.config['df_data'] = df_data
-                    
-                    map_html = None
-                    
-                    print("LOL")
-                    
+                    app.config['original_df_data'] = selected_streak  # Store the original data
+                    app.config['df_data'] = selected_streak  # Keep reference to update table
+
                 else:
                     error_message = "No data found for this Streak Gap."
             except ValueError:
                 error_message = "Invalid Streak Gap. Please enter a number."
-    
-    '''if request.method == "POST":
-        streak_id = request.form.get("streak_id")
-
-        if streak_id:
-            try:
-                streak_id = int(streak_id)
-                selected_streak = retrieve_streak(streak_id, engine1, combined_streak_view)
-                
-                if selected_streak is not None:
-                    gdf = convert_sql_to_gdf(selected_streak, 'Stadium Location').sort_values("date")
-                    route, distance, names_list = find_optimum_stadiums(gdf)
-                    gdf_filtered = gdf[gdf['unique_id'].isin(names_list)]
-                    map_html = plot_streak_map(gdf, 0.005)
-
-                    # Convert gdf to a list of dicts for the HTML table
-                    gdf_data = gdf.to_dict(orient="records")
-                    
-                    # Store both versions
-                    app.config['gdf'] = gdf
-                    app.config['gdf_filtered'] = gdf_filtered
-                else:
-                    error_message = "No data found for this Streak ID."
-            except ValueError:
-                error_message = "Invalid Streak ID. Please enter a number."'''
 
     return render_template("index.html", error_message=error_message, df_data=df_data)
 
@@ -436,19 +401,57 @@ def get_streak(streak_id):
     map_html = plot_streak_map(gdf, 0.005)
     return Markup(map_html)  # Send the updated map to the frontend
 
+@app.route("/filter_streak")
+def filter_streak():
+    """Returns the filtered gdf as JSON for display in the table."""
+    if "gdf_filtered" in app.config:
+        gdf_filtered = app.config["gdf_filtered"]
+        
+        print("HELLO",gdf_filtered.columns)
+        
+        # Convert to JSON format for the frontend
+        map_html = plot_streak_map(gdf_filtered, 0.005)
+        
+        return Markup(map_html)
     
-
-@app.route("/toggle_map")
-def toggle_map():
+@app.route("/get_original_table")
+def get_original_table():
+    """Returns the original gdf as JSON to reset the table."""
+    if "gdf" in app.config:
+        gdf = app.config["gdf"]
+        
+        # Convert to JSON format
+        original_data = gdf.to_dict(orient="records")
+        
+        return jsonify(original_data)
+    return jsonify([])  # Return empty if no data
+    
+@app.route("/toggle_map_and_table")
+def toggle_map_and_table():
+    """Toggles between original and filtered map & table using Markup and render_template."""
+    
     if "gdf_filtered" in app.config and "gdf" in app.config:
         if app.config.get("show_filtered", False):
+            # Switch back to original data
             map_html = plot_streak_map(app.config["gdf"], 0.005)
+            df_data = app.config["original_df_data"]  # Retrieve original data
             app.config["show_filtered"] = False
+            
+            print(df_data.columns,"34343434")
         else:
+            # Show filtered data
             map_html = plot_streak_map(app.config["gdf_filtered"], 0.005)
+            df_data = app.config["gdf_filtered"]
             app.config["show_filtered"] = True
-        return Markup(map_html)
-    return "Error: No map data available."
+            print(df_data.columns,"0000007")
+            
+
+        return render_template("index.html", 
+                               map_html=Markup(map_html), 
+                               df_data=df_data.to_dict(orient="records"),
+                               filtered_df_data=df_data.to_dict(orient="records"))
+
+    return "Error: No data available", 400
 
 
 if __name__ == "__main__":

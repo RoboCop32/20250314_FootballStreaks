@@ -76,68 +76,100 @@
         {{ map_html|safe }}
     </div>
 	
+	<button id="filter-btn">Filter</button>
+
+	<h3>Filtered Data Table</h3>
+	<div class="table-container">
+		<table id="filtered-data-table" border="1">
+			<thead>
+				<tr>
+					<th>Date</th>
+					<th>Home</th>
+					<th>Away</th>
+					<th>Stadium Location</th>
+				</tr>
+			</thead>
+			<tbody>
+				<!-- Filtered data will be inserted here dynamically -->
+			</tbody>
+		</table>
+	</div>
+
+	
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    function attachRowClickEvents() { //function with no paramters
-        document.querySelectorAll("#data-table tbody tr").forEach(row => { //.query selector - this selects all tabe rows inside of element datatable. AND .forEach is a loop, and executes the following code...
-            row.addEventListener("click", function() { //this listens to a Click
-                let streakId = this.dataset.streakId; //'this' refers to the row that was clicked. it refers to where you were  doing <tr data streak id = 222 >
-                
-                if (streakId) { //simple if statement
-                    document.querySelector(".map-container").innerHTML = "<p>Loading map...</p>";
-
-                    fetch(`/get_streak/${streakId}`) //fetch is used to send a request to the server
-                        .then(response => response.text()) //this just converts the reposne to plain text
-                        .then(data => { //.then is used as part of a Promise.
-                            document.querySelector(".map-container").innerHTML = data;
-                            updateMap();  // Ensure map updates properly
-                        })
-                        .catch(error => { //arrow is a shorthand way to write functions
-                            console.error("Error fetching streak:", error);
-                            document.querySelector(".map-container").innerHTML = "<p style='color: red;'>Failed to load map.</p>";
-                        });
-                }
-            });
-        });
-    }
-
-    function updateMap() {
-        let mapFrame = document.querySelector(".map-container iframe");
-
+    function attachRowClickEvents() {
         document.querySelectorAll("#data-table tbody tr").forEach(row => {
-            row.addEventListener("click", function() {
-                let lat = parseFloat(this.dataset.lat);
-                let lon = parseFloat(this.dataset.lon);
-
-                if (mapFrame && mapFrame.contentWindow) {
-                    mapFrame.contentWindow.postMessage({ zoomTo: [lat, lon] }, "*");
-                }
-            });
+            row.removeEventListener("click", rowClickHandler); // Remove old event listener (prevents duplicates)
+            row.addEventListener("click", rowClickHandler); // Attach new one
         });
     }
 
-    // Rebind row click events whenever the form is submitted
-    document.querySelector("form").addEventListener("submit", function() {
-        setTimeout(() => {
-            document.querySelector(".map-container").innerHTML = "";  // Clear the map
-            attachRowClickEvents();  // Reattach click events to new table rows
-        }, 500);  // Delay to allow data update
-    });
+    function rowClickHandler(event) {
+        let streakId = event.currentTarget.dataset.streakId; // Ensure we get the correct row's streak ID
 
-    // Handle toggle filtered map button
-    let toggleButton = document.getElementById("toggle-filter");
-    if (toggleButton) {
-        toggleButton.addEventListener("click", function() {
-            fetch("/toggle_map")
+        if (streakId) {
+            document.querySelector(".map-container").innerHTML = "<p>Loading map...</p>";
+
+            fetch(`/get_streak/${streakId}`)
                 .then(response => response.text())
                 .then(data => {
                     document.querySelector(".map-container").innerHTML = data;
-                    updateMap();
+                })
+                .catch(error => {
+                    console.error("Error fetching streak:", error);
+                    document.querySelector(".map-container").innerHTML = "<p style='color: red;'>Failed to load map.</p>";
                 });
+        }
+    }
+
+    // **Fix for the filter button**
+    let filterButton = document.getElementById("filter-btn");
+    if (filterButton) {
+        filterButton.addEventListener("click", function() {
+            fetch("/toggle_map_and_table")
+                .then(response => response.text())
+                .then(html => {
+                    let parser = new DOMParser();
+                    let doc = parser.parseFromString(html, "text/html");
+
+                    // Update the map
+                    document.querySelector(".map-container").innerHTML = doc.querySelector(".map-container").innerHTML;
+
+                    // Update the table
+                    // Update the main streak table
+					let mainTable = document.querySelector("#data-table tbody");
+					mainTable.innerHTML = ""; // Clear existing rows
+
+					let newRows = doc.querySelectorAll("#data-table tbody tr");  
+					newRows.forEach(row => {
+						let clonedRow = row.cloneNode(true);
+						mainTable.appendChild(clonedRow);
+					});
+
+					// Update the filtered data table
+					let filteredTable = document.querySelector("#filtered-data-table tbody");
+					filteredTable.innerHTML = ""; // Clear existing rows
+
+					let filteredData = doc.querySelectorAll("#filtered-data-table tbody tr");
+					filteredData.forEach(row => {
+						let clonedRow = row.cloneNode(true);
+						filteredTable.appendChild(clonedRow);
+					});
+
+
+                    // **Reattach Click Events** to restore streak selection
+                    attachRowClickEvents();
+
+                    // Toggle button text
+                    filterButton.textContent = (filterButton.textContent === "Filter") ? "Show Original" : "Filter";
+                })
+                .catch(error => console.error("Error toggling filter:", error));
         });
     }
 
-    attachRowClickEvents();  // Initial binding on page load
+    // **Ensure row clicks work when the page loads**
+    attachRowClickEvents();
 });
 </script>
 </html>
